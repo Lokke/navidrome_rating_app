@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext and accept self-signed certs for Navidrome domain -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">musik.radio-endstation.de</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+    <!-- Fallback to default config -->
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

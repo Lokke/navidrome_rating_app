@@ -38,6 +38,7 @@ dependencies:
   flutter_rating_bar: ^4.0.0
   shared_preferences: ^2.0.15
   just_audio: ^0.9.33
+  audio_service: ^0.18.18
 
 dev_dependencies:
   flutter_test:

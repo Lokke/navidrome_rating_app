@@ -1,141 +1,111 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'widgets/floating_bar.dart';
+import 'services/player_manager.dart';
+import 'models/playlist.dart';
+import 'utils/helpers.dart';
+import 'package:audio_service/audio_service.dart';
 
 void main() async {
-  debugPrint('App starting in main()');
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('Flutter binding initialized');
   runApp(const MyApp());
-  debugPrint('MyApp widget launched');
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool checking = true;
-  bool loggedIn = false;
-  String? username;
-  String? password;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkLogin();
-    // Fallback: stop showing spinner after 5s if still checking
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted && checking) {
-        setState(() {
-          checking = false;
-        });
-      }
-    });
-  }
-
-  Future<void> _checkLogin() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final u = prefs.getString('username');
-      final p = prefs.getString('password');
-      if (u != null && p != null) {
-        final service = NavidromeService(
-          baseUrl: 'https://musik.radio-endstation.de',
-          username: u,
-          password: p,
-        );
-        final ok = await service.ping();
-        if (ok) {
-          setState(() {
-            loggedIn = true;
-            username = u;
-            password = p;
-          });
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint('Login check error: $e');
-    } finally {
-      setState(() {
-        checking = false;
-        if (!loggedIn) loggedIn = false;
-      });
-    }
-  }
-
-  void _onLogin(String u, String p) {
-    setState(() {
-      loggedIn = true;
-      username = u;
-      password = p;
-    });
-  }
-
-  void _onLogout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('username');
-    await prefs.remove('password');
-    setState(() {
-      loggedIn = false;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    if (checking)
-      return MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
     return MaterialApp(
       title: 'Navidrome Rating',
       theme: ThemeData.dark().copyWith(
         colorScheme: ColorScheme.dark(
-          primary: Color(0xFFB71C1C), // deep red
-          secondary: Color(0xFFFF5722), // orange accent
+          primary: Color(0xFFB71C1C),
+          secondary: Color(0xFFFF5722),
         ),
         scaffoldBackgroundColor: Color(0xFF121212),
-        cardColor: Color(0xFF1E1E1E),
-        textTheme: ThemeData.dark().textTheme.apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFFFF5722),
-            foregroundColor: Colors.white,
-          ),
-        ),
       ),
-      home:
-          loggedIn
-              ? HomePage(
-                username: username!,
-                password: password!,
-                onLogout: _onLogout,
-              )
-              : LoginPage(onLogin: _onLogin),
+      home: const InitialPage(),
     );
   }
 }
 
-class Playlist {
-  final String id;
-  final String name;
-  final bool isPublic;
-  final String owner;
-  Playlist({
-    required this.id,
-    required this.name,
-    required this.isPublic,
-    required this.owner,
-  });
+class InitialPage extends StatelessWidget {
+  const InitialPage({super.key});
+
+  Future<bool> _checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username');
+    final password = prefs.getString('password');
+    return username != null && password != null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _checkLoginStatus(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.data == true) {
+          final prefs = SharedPreferences.getInstance();
+          return FutureBuilder<SharedPreferences>(
+            future: prefs,
+            builder: (context, prefsSnapshot) {
+              if (prefsSnapshot.connectionState == ConnectionState.done) {
+                final username =
+                    prefsSnapshot.data?.getString('username') ?? '';
+                final password =
+                    prefsSnapshot.data?.getString('password') ?? '';
+                return HomePage(
+                  username: username,
+                  password: password,
+                  onLogout:
+                      () => Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => LoginPage(onLogin: (u, p) {}),
+                        ),
+                      ),
+                );
+              }
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            },
+          );
+        } else {
+          return LoginPage(
+            onLogin: (username, password) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder:
+                      (context) => HomePage(
+                        username: username,
+                        password: password,
+                        onLogout:
+                            () => Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => LoginPage(onLogin: (u, p) {}),
+                              ),
+                            ),
+                      ),
+                ),
+              );
+            },
+          );
+        }
+      },
+    );
+  }
 }
 
 class Song {
@@ -469,7 +439,15 @@ class _RatingPageState extends State<RatingPage> {
     final initialSources =
         songs.take(initialCount).map((song) {
           final url = service._uri('/rest/stream', {'id': song.id});
-          return AudioSource.uri(url);
+          return AudioSource.uri(
+            url,
+            tag: MediaItem(
+              id: song.id,
+              title: song.title,
+              artist: song.artist,
+              artUri: Uri.parse(song.coverUrl),
+            ),
+          );
         }).toList();
     final playlistSource = ConcatenatingAudioSource(children: initialSources);
     await widget.player.setAudioSource(playlistSource);
@@ -483,6 +461,12 @@ class _RatingPageState extends State<RatingPage> {
         final nextSong = songs[totalBuffered];
         final nextSource = AudioSource.uri(
           service._uri('/rest/stream', {'id': nextSong.id}),
+          tag: MediaItem(
+            id: nextSong.id,
+            title: nextSong.title,
+            artist: nextSong.artist,
+            artUri: Uri.parse(nextSong.coverUrl),
+          ),
         );
         await (widget.player.audioSource as ConcatenatingAudioSource).add(
           nextSource,
@@ -602,11 +586,11 @@ class _RatingPageState extends State<RatingPage> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      _formatDuration(position),
+                                      formatDuration(position),
                                       style: TextStyle(color: Colors.white),
                                     ),
                                     Text(
-                                      _formatDuration(duration),
+                                      formatDuration(duration),
                                       style: TextStyle(color: Colors.white),
                                     ),
                                   ],
@@ -626,13 +610,6 @@ class _RatingPageState extends State<RatingPage> {
       ),
     );
   }
-}
-
-// Add helper below _RatingPageState
-String _formatDuration(Duration d) {
-  final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-  final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-  return '$mm:$ss';
 }
 
 class HomePage extends StatefulWidget {
@@ -656,11 +633,10 @@ class _HomePageState extends State<HomePage> {
     username: widget.username,
     password: widget.password,
   );
-  final AudioPlayer _player = AudioPlayer();
+  AudioPlayer get _player => PlayerManager().player;
 
   @override
   void dispose() {
-    _player.dispose();
     super.dispose();
   }
 
@@ -679,12 +655,7 @@ class _HomePageState extends State<HomePage> {
       body: Stack(
         children: [
           pages[_currentIndex],
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: kBottomNavigationBarHeight,
-            child: FloatingBar(player: _player),
-          ),
+          Positioned(left: 0, right: 0, child: FloatingBar(player: _player)),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -801,12 +772,24 @@ class _SearchPageState extends State<SearchPage> {
                           ],
                         ),
                         onTap: () async {
-                          await widget.player.setUrl(
-                            widget.service._uri('/rest/stream', {
-                              'id': song.id,
-                            }).toString(),
+                          final url = widget.service._uri('/rest/stream', {
+                            'id': song.id,
+                          });
+                          await widget.player.setAudioSource(
+                            AudioSource.uri(
+                              url,
+                              tag: MediaItem(
+                                id: song.id,
+                                title: song.title,
+                                artist: song.artist,
+                                artUri: Uri.parse(song.coverUrl),
+                              ),
+                            ),
                           );
                           widget.player.play();
+                          debugPrint(
+                            "SearchPage: Playing song - Title: ${song.title}, Artist: ${song.artist}",
+                          );
                         },
                       );
                     },
@@ -846,90 +829,6 @@ class AccountPage extends StatelessWidget {
           ElevatedButton(onPressed: onLogout, child: const Text('Abmelden')),
         ],
       ),
-    );
-  }
-}
-
-class FloatingBar extends StatelessWidget {
-  final AudioPlayer player;
-  const FloatingBar({required this.player, Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<SequenceState?>(
-      stream: player.sequenceStateStream,
-      builder: (context, snapshot) {
-        final sequenceState = snapshot.data;
-        if (sequenceState == null || sequenceState.currentSource == null) {
-          return const SizedBox.shrink(); // Keine Anzeige, wenn kein Lied aktiv ist
-        }
-
-        final currentSource = sequenceState.currentSource;
-        final title = currentSource?.tag?.title ?? 'Unbekannter Titel';
-        final artist = currentSource?.tag?.artist ?? 'Unbekannter Interpret';
-        final coverUrl = currentSource?.tag?.artUri?.toString();
-
-        return Container(
-          color: Colors.black87,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              if (coverUrl != null)
-                Image.network(
-                  coverUrl,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (context, error, stackTrace) =>
-                          Container(width: 40, height: 40, color: Colors.grey),
-                ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      artist,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              StreamBuilder<Duration>(
-                stream: player.positionStream,
-                builder: (context, positionSnapshot) {
-                  final position = positionSnapshot.data ?? Duration.zero;
-                  final duration = player.duration ?? Duration.zero;
-                  return Expanded(
-                    child: Slider(
-                      value: position.inMilliseconds.toDouble(),
-                      max: duration.inMilliseconds.toDouble(),
-                      onChanged: (value) {
-                        player.seek(Duration(milliseconds: value.toInt()));
-                      },
-                      activeColor: Theme.of(context).colorScheme.secondary,
-                      inactiveColor: Colors.grey.shade600,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

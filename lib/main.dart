@@ -287,6 +287,27 @@ class NavidromeService {
       );
     }).toList();
   }
+
+  Future<int> getRating(String id) async {
+    try {
+      final response = await http.get(_uri('/rest/getSong', {'id': id}));
+      if (response.statusCode != 200) {
+        throw Exception(
+          'HTTP ${response.statusCode}: ${response.reasonPhrase}',
+        );
+      }
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (data['subsonic-response'] == null ||
+          data['subsonic-response']['song'] == null ||
+          data['subsonic-response']['song']['userRating'] == null) {
+        throw Exception('Ungültige API-Antwort: ${response.body}');
+      }
+      return data['subsonic-response']['song']['userRating'] as int? ?? 0;
+    } catch (e) {
+      debugPrint('Fehler beim Abrufen der Bewertung: $e');
+      return 0; // Standardbewertung bei Fehler
+    }
+  }
 }
 
 class LoginPage extends StatefulWidget {
@@ -369,9 +390,15 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class RatingPage extends StatefulWidget {
-  const RatingPage({super.key, required this.username, required this.password});
+  const RatingPage({
+    super.key,
+    required this.username,
+    required this.password,
+    required this.player,
+  });
   final String username;
   final String password;
+  final AudioPlayer player;
   @override
   State<RatingPage> createState() => _RatingPageState();
 }
@@ -382,7 +409,6 @@ class _RatingPageState extends State<RatingPage> {
     username: widget.username,
     password: widget.password,
   );
-  final AudioPlayer _player = AudioPlayer();
   final PageController _pageController = PageController();
   List<Song> songs = [];
   int currentIndex = 0;
@@ -393,7 +419,7 @@ class _RatingPageState extends State<RatingPage> {
   void initState() {
     super.initState();
     // Sync carousel on sequence changes before loading tracks
-    _player.sequenceStateStream.listen((seqState) {
+    widget.player.sequenceStateStream.listen((seqState) {
       final idx = seqState?.currentIndex ?? 0;
       if (idx != currentIndex) {
         setState(() => currentIndex = idx);
@@ -409,7 +435,6 @@ class _RatingPageState extends State<RatingPage> {
 
   @override
   void dispose() {
-    _player.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -447,19 +472,21 @@ class _RatingPageState extends State<RatingPage> {
           return AudioSource.uri(url);
         }).toList();
     final playlistSource = ConcatenatingAudioSource(children: initialSources);
-    await _player.setAudioSource(playlistSource);
+    await widget.player.setAudioSource(playlistSource);
     // preload additional when nearing end
-    _player.currentIndexStream.listen((idx) async {
+    widget.player.currentIndexStream.listen((idx) async {
       if (idx == null) return;
       final totalBuffered =
-          (_player.audioSource as ConcatenatingAudioSource).length;
+          (widget.player.audioSource as ConcatenatingAudioSource).length;
       // Preload next song when reaching the end of buffer (only one ahead)
       if (idx + 1 >= totalBuffered && totalBuffered < songs.length) {
         final nextSong = songs[totalBuffered];
         final nextSource = AudioSource.uri(
           service._uri('/rest/stream', {'id': nextSong.id}),
         );
-        await (_player.audioSource as ConcatenatingAudioSource).add(nextSource);
+        await (widget.player.audioSource as ConcatenatingAudioSource).add(
+          nextSource,
+        );
       }
     });
   }
@@ -479,8 +506,8 @@ class _RatingPageState extends State<RatingPage> {
         itemCount: songs.length,
         onPageChanged: (index) {
           setState(() => currentIndex = index);
-          _player.seek(Duration.zero, index: index);
-          _player.play();
+          widget.player.seek(Duration.zero, index: index);
+          widget.player.play();
         },
         itemBuilder: (context, idx) {
           final song = songs[idx];
@@ -494,10 +521,10 @@ class _RatingPageState extends State<RatingPage> {
                   children: [
                     GestureDetector(
                       onTap: () {
-                        if (_player.playing) {
-                          _player.pause();
+                        if (widget.player.playing) {
+                          widget.player.pause();
                         } else {
-                          _player.play();
+                          widget.player.play();
                         }
                       },
                       child: Image.network(
@@ -541,11 +568,11 @@ class _RatingPageState extends State<RatingPage> {
                     const SizedBox(height: 8),
                     // Playback progress bar
                     StreamBuilder<Duration?>(
-                      stream: _player.durationStream,
+                      stream: widget.player.durationStream,
                       builder: (context, durSnap) {
                         final duration = durSnap.data ?? Duration.zero;
                         return StreamBuilder<Duration>(
-                          stream: _player.positionStream,
+                          stream: widget.player.positionStream,
                           builder: (context, posSnap) {
                             final position = posSnap.data ?? Duration.zero;
                             return Column(
@@ -565,7 +592,7 @@ class _RatingPageState extends State<RatingPage> {
                                       Theme.of(context).colorScheme.secondary,
                                   inactiveColor: Colors.grey.shade800,
                                   onChanged:
-                                      (value) => _player.seek(
+                                      (value) => widget.player.seek(
                                         Duration(milliseconds: value.toInt()),
                                       ),
                                 ),
@@ -629,15 +656,37 @@ class _HomePageState extends State<HomePage> {
     username: widget.username,
     password: widget.password,
   );
+  final AudioPlayer _player = AudioPlayer();
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      RatingPage(username: widget.username, password: widget.password),
-      SearchPage(service: service),
+      RatingPage(
+        username: widget.username,
+        password: widget.password,
+        player: _player,
+      ),
+      SearchPage(service: service, player: _player),
       AccountPage(username: widget.username, onLogout: widget.onLogout),
     ];
     return Scaffold(
-      body: pages[_currentIndex],
+      body: Stack(
+        children: [
+          pages[_currentIndex],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: kBottomNavigationBarHeight,
+            child: FloatingBar(player: _player),
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Theme.of(context).colorScheme.secondary,
@@ -655,7 +704,8 @@ class _HomePageState extends State<HomePage> {
 
 class SearchPage extends StatefulWidget {
   final NavidromeService service;
-  const SearchPage({required this.service, super.key});
+  final AudioPlayer player;
+  const SearchPage({required this.service, required this.player, super.key});
   @override
   State<SearchPage> createState() => _SearchPageState();
 }
@@ -664,59 +714,106 @@ class _SearchPageState extends State<SearchPage> {
   String _query = '';
   List<Song> _results = [];
   bool _loading = false;
+
   Future<void> _search() async {
     if (_query.isEmpty) return;
     setState(() => _loading = true);
-    _results = await widget.service.searchSongs(_query);
-    setState(() => _loading = false);
+    final results = await widget.service.searchSongs(_query);
+    for (var song in results) {
+      final rating = await widget.service.getRating(song.id);
+      song.rating = rating;
+    }
+    setState(() {
+      _results = results;
+      _loading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          TextField(
-            decoration: const InputDecoration(
-              hintText: 'Suchbegriff',
-              prefixIcon: Icon(Icons.search),
-            ),
-            style: const TextStyle(color: Colors.white),
-            onChanged: (v) => _query = v,
-            onSubmitted: (_) => _search(),
-          ),
-          const SizedBox(height: 8),
-          _loading
-              ? const CircularProgressIndicator()
-              : Expanded(
-                child: ListView.builder(
-                  itemCount: _results.length,
-                  itemBuilder: (c, i) {
-                    final song = _results[i];
-                    return ListTile(
-                      leading:
-                          song.coverUrl.isNotEmpty
-                              ? Image.network(
-                                song.coverUrl,
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                              )
-                              : const Icon(Icons.music_note),
-                      title: Text(
-                        song.title,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        song.artist,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                hintText: 'Suchbegriff',
+                prefixIcon: Icon(Icons.search),
               ),
-        ],
+              style: const TextStyle(color: Colors.white),
+              onChanged: (v) => _query = v,
+              onSubmitted: (_) => _search(),
+            ),
+            const SizedBox(height: 8),
+            _loading
+                ? const CircularProgressIndicator()
+                : Expanded(
+                  child: ListView.builder(
+                    itemCount: _results.length,
+                    itemBuilder: (c, i) {
+                      final song = _results[i];
+                      return ListTile(
+                        leading:
+                            song.coverUrl.isNotEmpty
+                                ? Image.network(
+                                  song.coverUrl,
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(width: 40, height: 40);
+                                  },
+                                )
+                                : Container(
+                                  width: 40,
+                                  height: 40,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary.withOpacity(0.3),
+                                ),
+                        title: Text(
+                          song.title,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              song.artist,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 4),
+                            RatingBarIndicator(
+                              rating: song.rating.toDouble(),
+                              itemCount: 5,
+                              itemSize: 16,
+                              direction: Axis.horizontal,
+                              unratedColor: Colors.grey.shade600,
+                              itemBuilder:
+                                  (context, _) => Icon(
+                                    Icons.star,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        onTap: () async {
+                          await widget.player.setUrl(
+                            widget.service._uri('/rest/stream', {
+                              'id': song.id,
+                            }).toString(),
+                          );
+                          widget.player.play();
+                        },
+                      );
+                    },
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }
@@ -749,6 +846,90 @@ class AccountPage extends StatelessWidget {
           ElevatedButton(onPressed: onLogout, child: const Text('Abmelden')),
         ],
       ),
+    );
+  }
+}
+
+class FloatingBar extends StatelessWidget {
+  final AudioPlayer player;
+  const FloatingBar({required this.player, Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<SequenceState?>(
+      stream: player.sequenceStateStream,
+      builder: (context, snapshot) {
+        final sequenceState = snapshot.data;
+        if (sequenceState == null || sequenceState.currentSource == null) {
+          return const SizedBox.shrink(); // Keine Anzeige, wenn kein Lied aktiv ist
+        }
+
+        final currentSource = sequenceState.currentSource;
+        final title = currentSource?.tag?.title ?? 'Unbekannter Titel';
+        final artist = currentSource?.tag?.artist ?? 'Unbekannter Interpret';
+        final coverUrl = currentSource?.tag?.artUri?.toString();
+
+        return Container(
+          color: Colors.black87,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              if (coverUrl != null)
+                Image.network(
+                  coverUrl,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorBuilder:
+                      (context, error, stackTrace) =>
+                          Container(width: 40, height: 40, color: Colors.grey),
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      artist,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              StreamBuilder<Duration>(
+                stream: player.positionStream,
+                builder: (context, positionSnapshot) {
+                  final position = positionSnapshot.data ?? Duration.zero;
+                  final duration = player.duration ?? Duration.zero;
+                  return Expanded(
+                    child: Slider(
+                      value: position.inMilliseconds.toDouble(),
+                      max: duration.inMilliseconds.toDouble(),
+                      onChanged: (value) {
+                        player.seek(Duration(milliseconds: value.toInt()));
+                      },
+                      activeColor: Theme.of(context).colorScheme.secondary,
+                      inactiveColor: Colors.grey.shade600,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

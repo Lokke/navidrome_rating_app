@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:just_audio/just_audio.dart';
 import '../services/navidrome_service.dart';
 import '../services/playback_manager.dart';
@@ -37,6 +37,8 @@ class _SearchPageState extends State<SearchPage> {
       final rating = await widget.service.getRating(song.id);
       song.rating = rating;
     }
+    // Sort by rating descending (highest rating first)
+    results.sort((a, b) => b.rating.compareTo(a.rating));
     setState(() {
       _results = results;
       _loading = false;
@@ -50,18 +52,22 @@ class _SearchPageState extends State<SearchPage> {
         padding: const EdgeInsets.all(8),
         child: Column(
           children: [
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Suchbegriff',
-                prefixIcon: Icon(Icons.search),
+            CupertinoSearchTextField(
+              placeholder: 'Suchbegriff',
+              backgroundColor: CupertinoColors.secondarySystemFill,
+              style: const TextStyle(color: CupertinoColors.white),
+              prefixIcon: const Icon(
+                CupertinoIcons.search,
+                color: CupertinoColors.white,
               ),
-              style: const TextStyle(color: Colors.white),
-              onChanged: (v) => _query = v,
-              onSubmitted: (_) => _search(),
+              onChanged: (v) {
+                _query = v;
+                _search();
+              },
             ),
             const SizedBox(height: 8),
             _loading
-                ? const CircularProgressIndicator()
+                ? const CupertinoActivityIndicator()
                 : Expanded(
                   child: ListView.builder(
                     itemCount: _results.length,

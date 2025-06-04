@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/navidrome_service.dart';
-import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   final void Function(String username, String password) onLogin;
@@ -47,32 +46,24 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Center(
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(middle: Text('Login')),
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              CupertinoTextField(
                 controller: _usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  filled: true,
-                  fillColor: Colors.white24,
-                ),
-                style: const TextStyle(color: Colors.white),
+                placeholder: 'Username',
+                style: const TextStyle(color: CupertinoColors.white),
               ),
               const SizedBox(height: 16),
-              TextField(
+              CupertinoTextField(
                 controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  filled: true,
-                  fillColor: Colors.white24,
-                ),
-                style: const TextStyle(color: Colors.white),
+                placeholder: 'Password',
+                style: const TextStyle(color: CupertinoColors.white),
                 obscureText: true,
               ),
               if (_error != null)
@@ -80,13 +71,15 @@ class _LoginPageState extends State<LoginPage> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _error!,
-                    style: const TextStyle(color: Colors.red),
+                    style: const TextStyle(
+                      color: CupertinoColors.destructiveRed,
+                    ),
                   ),
                 ),
               const SizedBox(height: 32),
               _loading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
+                  ? const CupertinoActivityIndicator()
+                  : CupertinoButton.filled(
                     onPressed: _login,
                     child: const Text('Login'),
                   ),

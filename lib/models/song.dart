@@ -1,3 +1,9 @@
+// Purpose: Represents a song fetched from the Navidrome API.
+// Contains metadata like ID, title, artist, cover URL, and user rating.
+// References:
+// - Used by `NavidromeService` to fetch songs and ratings.
+// - Used by `PlaybackManager` for playback.
+
 class Song {
   final String id;
   final String title;

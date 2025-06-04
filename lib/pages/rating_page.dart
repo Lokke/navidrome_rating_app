@@ -2,9 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../services/navidrome_service.dart';
-import '../widgets/song_card.dart';
 import '../models/song.dart';
+import '../services/playback_manager.dart';
+
+// Purpose: Allows users to rate songs from a playlist.
+// Fetches unrated songs and manages playback.
+// References:
+// - `NavidromeService`: Fetches playlists and songs.
+// - `PlaybackManager`: Handles playback logic.
 
 class RatingPage extends StatefulWidget {
   const RatingPage({
@@ -26,6 +33,11 @@ class _RatingPageState extends State<RatingPage> {
     username: widget.username,
     password: widget.password,
   );
+  late final playbackManager = PlaybackManager(
+    player: widget.player,
+    service: service,
+  );
+
   final PageController _pageController = PageController();
   List<Song> songs = [];
   int currentIndex = 0;
@@ -68,73 +80,15 @@ class _RatingPageState extends State<RatingPage> {
       final allSongs = await service.getPlaylistSongs(myPlaylist.id);
       final unrated = allSongs.where((s) => s.rating == 0).toList();
       songs = unrated.cast<Song>();
-      await _initAudio();
-      if (!mounted) return;
       setState(() {
         loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         error = 'Fehler: ${e.toString()}';
         loading = false;
       });
     }
-  }
-
-  Future<void> _initAudio() async {
-    final initialCount = songs.length >= 1 ? 1 : songs.length;
-    // Update AudioSource initialization to include tags
-    final initialSources =
-        songs.take(initialCount).map((song) {
-          final url = service.uri('/rest/stream', {'id': song.id});
-          debugPrint(
-            'RatingPage - Adding song to playlist: ${song.title}, ${song.artist}, ${song.coverUrl}',
-          );
-          return AudioSource.uri(
-            url,
-            tag: MediaItem(
-              id: song.id,
-              title: song.title,
-              artist: song.artist,
-              artUri: Uri.parse(song.coverUrl),
-            ),
-          );
-        }).toList();
-    final playlistSource = ConcatenatingAudioSource(children: initialSources);
-    await widget.player.setAudioSource(playlistSource);
-    widget.player.currentIndexStream.listen((idx) async {
-      if (idx == null) return;
-      final totalBuffered =
-          (widget.player.audioSource as ConcatenatingAudioSource).length;
-      if (idx + 1 >= totalBuffered && totalBuffered < songs.length) {
-        final nextSong = songs[totalBuffered];
-        final nextSource = AudioSource.uri(
-          service.uri('/rest/stream', {'id': nextSong.id}),
-          tag: MediaItem(
-            id: nextSong.id,
-            title: nextSong.title,
-            artist: nextSong.artist,
-            artUri: Uri.parse(nextSong.coverUrl),
-          ),
-        );
-        await (widget.player.audioSource as ConcatenatingAudioSource).add(
-          nextSource,
-        );
-      }
-
-      // Log the currently playing song
-      final currentSong = songs[idx];
-      debugPrint(
-        "RatingPage: Now playing - Title: ${currentSong.title}, Artist: ${currentSong.artist}, Cover URL: ${currentSong.coverUrl}",
-      );
-
-      // Save the currently playing song to SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('lastPlayedTitle', currentSong.title);
-      await prefs.setString('lastPlayedArtist', currentSong.artist);
-      await prefs.setString('lastPlayedCoverUrl', currentSong.coverUrl);
-    });
   }
 
   @override
@@ -152,19 +106,146 @@ class _RatingPageState extends State<RatingPage> {
         itemCount: songs.length,
         onPageChanged: (index) {
           setState(() => currentIndex = index);
+          // Seek to the song but do not play it automatically
           widget.player.seek(Duration.zero, index: index);
-          widget.player.play();
         },
         itemBuilder: (context, idx) {
           final song = songs[idx];
-          return SongCard(
-            song: song,
-            onRatingUpdate: (rating) async {
-              await service.setRating(song.id, rating.toInt());
-              setState(() {
-                song.rating = rating.toInt();
-              });
-            },
+          return Center(
+            child: Card(
+              margin: const EdgeInsets.all(8),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        if (widget.player.playing) {
+                          widget.player.pause();
+                        } else {
+                          final url = service.uri('/rest/stream', {
+                            'id': song.id,
+                          });
+                          debugPrint('Generated URL for playback: $url');
+                          try {
+                            final audioSource = AudioSource.uri(
+                              url,
+                              tag: MediaItem(
+                                id: song.id,
+                                title: song.title,
+                                artist: song.artist,
+                                artUri: Uri.parse(song.coverUrl),
+                              ),
+                            );
+                            await widget.player.setAudioSource(audioSource);
+                            widget.player.play();
+                          } catch (e) {
+                            debugPrint('Error setting audio source: $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Failed to play song: ${e.toString()}',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Image.network(
+                        song.coverUrl,
+                        width: 300,
+                        height: 300,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      song.title,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(song.artist, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(height: 8),
+                    RatingBar.builder(
+                      initialRating: song.rating.toDouble(),
+                      minRating: 1,
+                      direction: Axis.horizontal,
+                      allowHalfRating: false,
+                      itemCount: 5,
+                      itemSize: 32,
+                      unratedColor: Colors.grey.shade600,
+                      itemBuilder:
+                          (context, _) => Icon(
+                            Icons.star,
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
+                      onRatingUpdate: (rating) async {
+                        await service.setRating(song.id, rating.toInt());
+                        setState(() {
+                          song.rating = rating.toInt();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    // Playback progress bar
+                    StreamBuilder<Duration?>(
+                      stream: widget.player.durationStream,
+                      builder: (context, durSnap) {
+                        final duration = durSnap.data ?? Duration.zero;
+                        return StreamBuilder<Duration>(
+                          stream: widget.player.positionStream,
+                          builder: (context, posSnap) {
+                            final position = posSnap.data ?? Duration.zero;
+                            return Column(
+                              children: [
+                                // Interactive progress slider
+                                Slider(
+                                  min: 0,
+                                  max:
+                                      duration.inMilliseconds > 0
+                                          ? duration.inMilliseconds.toDouble()
+                                          : 1.0,
+                                  value:
+                                      position.inMilliseconds
+                                          .clamp(0, duration.inMilliseconds)
+                                          .toDouble(),
+                                  activeColor:
+                                      Theme.of(context).colorScheme.secondary,
+                                  inactiveColor: Colors.grey.shade800,
+                                  onChanged:
+                                      (value) => widget.player.seek(
+                                        Duration(milliseconds: value.toInt()),
+                                      ),
+                                ),
+                                // Time labels
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      position.toString().split('.')[0],
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    Text(
+                                      duration.toString().split('.')[0],
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       ),

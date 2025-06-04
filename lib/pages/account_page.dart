@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Purpose: Displays account information and provides a logout option.
+/// References:
+/// - `HomePage`: Navigates to this page for account management.
 class AccountPage extends StatelessWidget {
   final String username;
   final VoidCallback onLogout;

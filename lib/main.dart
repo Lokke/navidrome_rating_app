@@ -1,3 +1,9 @@
+// Purpose: Entry point of the application.
+// Initializes the app and sets up the main theme and navigation.
+// References:
+// - `InitialPage`: The first page displayed to check login status.
+// - `SharedPreferences`: Used to store and retrieve user credentials.
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
@@ -490,8 +496,8 @@ class _RatingPageState extends State<RatingPage> {
         itemCount: songs.length,
         onPageChanged: (index) {
           setState(() => currentIndex = index);
+          // Seek to the song but do not play it automatically
           widget.player.seek(Duration.zero, index: index);
-          widget.player.play();
         },
         itemBuilder: (context, idx) {
           final song = songs[idx];
@@ -509,6 +515,23 @@ class _RatingPageState extends State<RatingPage> {
                           widget.player.pause();
                         } else {
                           widget.player.play();
+                          // Update FloatingBar only when the song is played
+                          final currentIndex = widget.player.currentIndex;
+                          if (currentIndex != null &&
+                              currentIndex < songs.length) {
+                            final currentSong = songs[currentIndex];
+                            widget.player.setAudioSource(
+                              AudioSource.uri(
+                                Uri.parse(currentSong.coverUrl),
+                                tag: MediaItem(
+                                  id: currentSong.id,
+                                  title: currentSong.title,
+                                  artist: currentSong.artist,
+                                  artUri: Uri.parse(currentSong.coverUrl),
+                                ),
+                              ),
+                            );
+                          }
                         }
                       },
                       child: Image.network(
@@ -655,7 +678,12 @@ class _HomePageState extends State<HomePage> {
       body: Stack(
         children: [
           pages[_currentIndex],
-          Positioned(left: 0, right: 0, child: FloatingBar(player: _player)),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0, // Adjusted to position the FloatingBar at the bottom
+            child: FloatingBar(player: _player),
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

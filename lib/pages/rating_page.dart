@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:http/http.dart' as http;
 import '../services/navidrome_service.dart';
 import '../models/song.dart';
 import '../services/playback_manager.dart';
@@ -91,6 +91,10 @@ class _RatingPageState extends State<RatingPage> {
     }
   }
 
+  void _playSong(String mediaId) {
+    playbackManager.playMedia(mediaId);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading)
@@ -129,6 +133,12 @@ class _RatingPageState extends State<RatingPage> {
                           });
                           debugPrint('Generated URL for playback: $url');
                           try {
+                            final response = await http.head(url);
+                            if (response.statusCode != 200) {
+                              throw Exception(
+                                'Invalid stream URL: ${response.statusCode}',
+                              );
+                            }
                             final audioSource = AudioSource.uri(
                               url,
                               tag: MediaItem(
@@ -191,6 +201,10 @@ class _RatingPageState extends State<RatingPage> {
                       },
                     ),
                     const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () => _playSong(song.mediaId),
+                      child: const Text('Play'),
+                    ),
                     // Playback progress bar
                     StreamBuilder<Duration?>(
                       stream: widget.player.durationStream,
@@ -237,6 +251,47 @@ class _RatingPageState extends State<RatingPage> {
                                   ],
                                 ),
                               ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    // Added buffering and playback progress indicator
+                    StreamBuilder<Duration?>(
+                      stream: widget.player.bufferedPositionStream,
+                      builder: (context, bufferedSnap) {
+                        final bufferedPosition =
+                            bufferedSnap.data ?? Duration.zero;
+                        return StreamBuilder<Duration>(
+                          stream: widget.player.positionStream,
+                          builder: (context, posSnap) {
+                            final position = posSnap.data ?? Duration.zero;
+                            final duration =
+                                widget.player.duration ?? Duration.zero;
+                            return Container(
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade800,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: Stack(
+                                children: [
+                                  FractionallySizedBox(
+                                    widthFactor:
+                                        bufferedPosition.inMilliseconds /
+                                        duration.inMilliseconds,
+                                    child: Container(
+                                      color: Colors.orange.shade400,
+                                    ),
+                                  ),
+                                  FractionallySizedBox(
+                                    widthFactor:
+                                        position.inMilliseconds /
+                                        duration.inMilliseconds,
+                                    child: Container(color: Colors.white),
+                                  ),
+                                ],
+                              ),
                             );
                           },
                         );

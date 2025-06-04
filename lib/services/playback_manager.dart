@@ -30,7 +30,10 @@ class PlaybackManager {
       final song = await _fetchSongMetadata(mediaId);
 
       // Generate the stream URL for the media.
-      final streamUrl = _service.uri('/rest/stream', {'id': mediaId});
+      final streamUrl = _service.uri('/rest/stream', {
+        'id': mediaId,
+        'maxBitRate': '320', // Fetch the highest quality available
+      });
       print('Stream URL: $streamUrl');
 
       // Debugging: Print response headers and body to verify the stream.
@@ -87,6 +90,7 @@ class PlaybackManager {
                 'size': '500',
               }).toString()
               : '',
+      mediaId: mediaId,
       rating: rating,
     );
   }
@@ -100,7 +104,10 @@ class PlaybackManager {
   // Stops playback.
   void stop() => _player.stop();
 
-  // Provides a stream of the current playback position.
+  // Provides a stream of the buffered position of the current media.
+  Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
+
+  // Provides a stream of the playback position of the current media.
   Stream<Duration> get positionStream => _player.positionStream;
 
   // Provides a stream of the total duration of the current media.

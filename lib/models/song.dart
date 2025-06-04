@@ -9,6 +9,7 @@ class Song {
   final String title;
   final String artist;
   final String coverUrl;
+  final String mediaId;
   int rating;
 
   Song({
@@ -16,6 +17,7 @@ class Song {
     required this.title,
     required this.artist,
     required this.coverUrl,
+    required this.mediaId,
     this.rating = 0,
   });
 
@@ -28,6 +30,7 @@ class Song {
           json['coverArt'] != null
               ? 'https://musik.radio-endstation.de/rest/getCoverArt?id=${json['coverArt']}'
               : '',
+      mediaId: json['mediaId'] as String,
       rating: json['userRating'] as int? ?? 0,
     );
   }

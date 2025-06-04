@@ -7,6 +7,8 @@ import 'navidrome_service.dart';
 import '../models/song.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 class PlaybackManager {
   // The AudioPlayer instance used for playback.
@@ -22,6 +24,17 @@ class PlaybackManager {
   }) : _player = player,
        _service = service;
 
+  // Builds a MediaItem object for a given song.
+  MediaItem buildMediaItem(Song song) {
+    return MediaItem(
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album ?? "Unknown Album",
+      artUri: Uri.parse(song.coverUrl),
+    );
+  }
+
   // Plays a media file using its ID.
   // Fetches metadata, generates the stream URL, and starts playback.
   Future<void> playMedia(String mediaId) async {
@@ -36,28 +49,29 @@ class PlaybackManager {
       });
       print('Stream URL: $streamUrl');
 
-      // Debugging: Print response headers and body to verify the stream.
+      // Download the song file
       final response = await http.get(streamUrl);
-      print('Response Headers: ${response.headers}');
-      print('Response Status: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      // Check if the response is valid.
       if (response.statusCode != 200) {
         throw Exception(
           'Failed to fetch audio stream: ${response.reasonPhrase}',
         );
       }
 
-      // Create an AudioSource using the stream URL and metadata.
-      final audioSource = AudioSource.uri(
-        streamUrl,
-        tag: MediaItem(
-          id: song.id,
-          title: song.title,
-          artist: song.artist,
-          artUri: Uri.parse(song.coverUrl),
-        ),
+      // Save the file locally
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/$mediaId.mp3';
+      final file = File(filePath);
+      await file.writeAsBytes(response.bodyBytes);
+
+      // Verify the file size
+      if (await file.length() == 0) {
+        throw Exception('Downloaded file is empty');
+      }
+
+      // Use the local file for playback
+      final audioSource = AudioSource.file(
+        filePath,
+        tag: buildMediaItem(song), // Use centralized method
       );
 
       // Set the audio source and start playback.

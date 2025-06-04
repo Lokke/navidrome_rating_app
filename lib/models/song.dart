@@ -11,6 +11,7 @@ class Song {
   final String coverUrl;
   final String mediaId;
   int rating;
+  final String? album; // Added album property
 
   Song({
     required this.id,
@@ -19,6 +20,7 @@ class Song {
     required this.coverUrl,
     required this.mediaId,
     this.rating = 0,
+    this.album, // Initialize album
   });
 
   factory Song.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class Song {
               : '',
       mediaId: json['mediaId'] as String,
       rating: json['userRating'] as int? ?? 0,
+      album: json['album'] as String?, // Populate album from JSON
     );
   }
 }

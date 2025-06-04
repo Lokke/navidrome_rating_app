@@ -1,7 +1,13 @@
-// Purpose: Represents a playlist fetched from the Navidrome API.
-// Contains basic information like ID, name, visibility, and owner.
-// References:
-// - Used by `NavidromeService` to fetch playlists.
+/*
+ * File: playlist.dart
+ * ------------------
+ * Defines the Playlist model representing a Navidrome playlist.
+ * Fields:
+ * - id: Unique playlist identifier.
+ * - name: Playlist name.
+ * - isPublic: Visibility flag.
+ * - owner: Username of the playlist owner.
+ */
 
 class Playlist {
   final String id;

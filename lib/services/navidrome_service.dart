@@ -71,7 +71,14 @@ class NavidromeService {
                 'size': '500',
               }).toString()
               : '';
-      return Song(id: id, title: title, artist: artist, coverUrl: coverUrl);
+      return Song(
+        id: id,
+        title: title,
+        artist: artist,
+        coverUrl: coverUrl,
+        mediaId: id,
+        album: e['album'] as String?, // Populate album field
+      );
     }).toList();
   }
 
@@ -146,6 +153,8 @@ class NavidromeService {
         artist: artist,
         coverUrl: coverUrl,
         rating: rating,
+        mediaId: id,
+        album: e['album'] as String?, // Populate album field
       );
     }).toList();
   }

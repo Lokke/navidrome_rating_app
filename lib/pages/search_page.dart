@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../services/navidrome_service.dart';
 import '../services/playback_manager.dart';
+import '../services/song_download_service.dart';
 import '../widgets/song_list_tile.dart';
 import '../models/song.dart';
 
@@ -22,6 +23,7 @@ class _SearchPageState extends State<SearchPage> {
     player: widget.player,
     service: widget.service,
   );
+  late final songDownloadService = SongDownloadService(widget.service);
 
   void _playSong(String mediaId) {
     playbackManager.playMedia(mediaId);

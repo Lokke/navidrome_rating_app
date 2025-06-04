@@ -66,13 +66,14 @@ class _HomePageState extends State<HomePage> {
       maxHeight: MediaQuery.of(context).size.height * 0.9,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       body: Scaffold(
+        resizeToAvoidBottomInset: false, // allow FloatingBar to be covered by keyboard
         body: Stack(
           children: [
             pages[_currentIndex],
             Positioned(
               left: 5,
               right: 5,
-              bottom: kBottomNavigationBarHeight + 5,
+              bottom: kBottomNavigationBarHeight + 2, // minimal gap to navigation bar
               child: GestureDetector(
                 onTap: () => _panelController.open(),
                 child: FloatingBar(player: _player, service: service),

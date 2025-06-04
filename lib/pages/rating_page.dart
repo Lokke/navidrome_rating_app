@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../models/song.dart';
 import '../services/navidrome_service.dart';
 import '../services/playback_manager.dart';
@@ -64,21 +63,6 @@ class _RatingPageState extends State<RatingPage> {
     }
   }
 
-  void _playSong(Song song) async {
-    try {
-      setState(() => loading = true); // Show loading indicator during download
-      await playbackManager.playMedia(song.id); // Download and play the song
-      setState(
-        () => loading = false,
-      ); // Hide loading indicator after playback starts
-    } catch (e) {
-      setState(() {
-        error = 'Fehler beim Abspielen: ${e.toString()}';
-        loading = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -103,6 +87,7 @@ class _RatingPageState extends State<RatingPage> {
     }
 
     return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.black,
       navigationBar: const CupertinoNavigationBar(middle: Text('Bewertungen')),
       child: SafeArea(
         child: ListView.builder(
@@ -116,7 +101,7 @@ class _RatingPageState extends State<RatingPage> {
                 margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
+                  color: CupertinoColors.black,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -138,7 +123,7 @@ class _RatingPageState extends State<RatingPage> {
                           Text(
                             song.title,
                             style: const TextStyle(
-                              color: CupertinoColors.label,
+                              color: CupertinoColors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -147,33 +132,14 @@ class _RatingPageState extends State<RatingPage> {
                           Text(
                             song.artist,
                             style: const TextStyle(
-                              color: CupertinoColors.systemGrey,
+                              color: CupertinoColors.systemRed,
                               fontSize: 14,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    RatingBar.builder(
-                      initialRating: 0,
-                      minRating: 1,
-                      direction: Axis.horizontal,
-                      allowHalfRating: false,
-                      itemCount: 5,
-                      itemSize: 32,
-                      unratedColor: Colors.grey.shade600,
-                      itemBuilder: (context, _) => Icon(
-                        Icons.star,
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                      onRatingUpdate: (rating) async {
-                        // Update server and remove this song from the list
-                        await service.setRating(song.id, rating.toInt());
-                        setState(() {
-                          songs.removeAt(index);
-                        });
-                      },
-                    ),
+                    // No rating stars displayed
                   ],
                 ),
               ),

@@ -155,7 +155,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                 itemBuilder:
                     (context, _) => const Icon(
                       CupertinoIcons.star_fill,
-                      color: CupertinoColors.activeBlue,
+                      color: CupertinoColors.systemRed,
                     ),
                 onRatingUpdate: (rating) => _updateRating(rating.toInt()),
               ),

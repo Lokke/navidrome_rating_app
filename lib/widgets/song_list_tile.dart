@@ -78,7 +78,7 @@ class SongListTile extends StatelessWidget {
               itemBuilder:
                   (context, _) => const Icon(
                     CupertinoIcons.star_fill,
-                    color: CupertinoColors.activeBlue,
+                    color: CupertinoColors.systemRed,
                     size: 16,
                   ),
             ),

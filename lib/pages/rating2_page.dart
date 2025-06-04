@@ -136,7 +136,8 @@ class _Rating2PageState extends State<Rating2Page> {
                     itemBuilder:
                         (context, _) => Icon(
                           Icons.star,
-                          color: Theme.of(context).colorScheme.secondary,
+                          color: Colors.red.shade700,
+                          size: 32,
                         ),
                     onRatingUpdate: (rating) async {
                       await service.setRating(song.id, rating.toInt());

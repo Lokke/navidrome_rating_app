@@ -5,7 +5,7 @@
 // - Fetches and displays the user's rating
 // - Allows updating the rating with NavidromeService
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../services/navidrome_service.dart';
@@ -73,70 +73,136 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   Widget build(BuildContext context) {
     final item = _mediaItem;
-    // If no media item loaded, show placeholder text
     if (item == null) {
-      return const Center(child: Text('No song playing'));
+      return const CupertinoPageScaffold(
+        child: Center(child: Text('No song playing')),
+      );
     }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Now Playing'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_downward),
-          onPressed: widget.onClose, // Close sliding panel via callback
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(item.title),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.chevron_down),
+          onPressed: widget.onClose,
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Display cover art
-            if (item.artUri != null)
-              Image.network(
-                item.artUri.toString(),
-                width: 300,
-                height: 300,
-                fit: BoxFit.cover,
-              ),
-            const SizedBox(height: 16),
-            // Song title
-            Text(
-              item.title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            // Artist name
-            Text(
-              item.artist ?? '',
-              style: const TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            // Album name
-            Text(
-              item.album ?? '',
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            // Rating bar for setting song rating
-            RatingBar.builder(
-              initialRating: _currentRating.toDouble(),
-              minRating: 1,
-              direction: Axis.horizontal,
-              allowHalfRating: false,
-              itemCount: 5,
-              itemSize: 40,
-              unratedColor: Colors.grey.shade600,
-              itemBuilder:
-                  (context, _) => Icon(
-                    Icons.star,
-                    color: Theme.of(context).colorScheme.secondary,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Swipeable cover art
+              if (item.artUri != null)
+                GestureDetector(
+                  onHorizontalDragEnd: (details) {
+                    if (details.primaryVelocity! < 0) {
+                      widget.player.seekToNext();
+                    } else if (details.primaryVelocity! > 0) {
+                      widget.player.seekToPrevious();
+                    }
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      item.artUri.toString(),
+                      width: 300,
+                      height: 300,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-              onRatingUpdate: (rating) => _updateRating(rating.toInt()),
-            ),
-          ],
+                ),
+              const SizedBox(height: 16),
+              // Metadata
+              Text(
+                item.title,
+                style: TextStyle(
+                  color: CupertinoColors.label,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.artist ?? '',
+                style: const TextStyle(
+                  color: CupertinoColors.systemGrey,
+                  fontSize: 18,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.album ?? '',
+                style: const TextStyle(
+                  color: CupertinoColors.systemGrey2,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              // Rating
+              RatingBar.builder(
+                initialRating: _currentRating.toDouble(),
+                minRating: 1,
+                direction: Axis.horizontal,
+                allowHalfRating: false,
+                itemCount: 5,
+                itemSize: 32,
+                unratedColor: CupertinoColors.systemGrey2,
+                itemBuilder:
+                    (context, _) => const Icon(
+                      CupertinoIcons.star_fill,
+                      color: CupertinoColors.activeBlue,
+                    ),
+                onRatingUpdate: (rating) => _updateRating(rating.toInt()),
+              ),
+              const SizedBox(height: 24),
+              // Playback controls: previous, play/pause, next
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CupertinoButton(
+                    child: const Icon(
+                      CupertinoIcons.backward_end_fill,
+                      size: 28,
+                    ),
+                    onPressed: () => widget.player.seekToPrevious(),
+                  ),
+                  const SizedBox(width: 32),
+                  StreamBuilder<bool>(
+                    stream: widget.player.playingStream,
+                    builder: (context, snapshot) {
+                      final playing = snapshot.data ?? false;
+                      return CupertinoButton(
+                        child: Icon(
+                          playing
+                              ? CupertinoIcons.pause_fill
+                              : CupertinoIcons.play_fill,
+                          size: 36,
+                        ),
+                        onPressed:
+                            () =>
+                                playing
+                                    ? widget.player.pause()
+                                    : widget.player.play(),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 32),
+                  CupertinoButton(
+                    child: const Icon(
+                      CupertinoIcons.forward_end_fill,
+                      size: 28,
+                    ),
+                    onPressed: () => widget.player.seekToNext(),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

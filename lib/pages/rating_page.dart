@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../models/song.dart';
 import '../services/navidrome_service.dart';
@@ -50,8 +50,10 @@ class _RatingPageState extends State<RatingPage> {
             p.name.contains('Hausaufgaben'),
       );
       final allSongs = await service.getPlaylistSongs(myPlaylist.id);
+      // Only include unrated songs
+      final unrated = allSongs.where((s) => s.rating == 0).toList();
       setState(() {
-        songs = allSongs; // Only fetch metadata, no downloading
+        songs = unrated;
         loading = false;
       });
     } catch (e) {
@@ -80,79 +82,104 @@ class _RatingPageState extends State<RatingPage> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const CupertinoPageScaffold(
+        child: Center(child: CupertinoActivityIndicator()),
+      );
     }
     if (error != null) {
-      return Scaffold(body: Center(child: Text(error!)));
+      return CupertinoPageScaffold(
+        child: Center(
+          child: Text(
+            error!,
+            style: const TextStyle(color: CupertinoColors.destructiveRed),
+          ),
+        ),
+      );
     }
     if (songs.isEmpty) {
-      return const Scaffold(
-        body: Center(child: Text('Keine Lieder gefunden.')),
+      return const CupertinoPageScaffold(
+        child: Center(child: Text('Keine Lieder gefunden.')),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        // Heading removed per user request
-      ),
-      body: ListView.builder(
-        itemCount: songs.length,
-        itemBuilder: (context, index) {
-          final song = songs[index];
-          return Card(
-            margin: const EdgeInsets.all(8),
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.network(
-                    song.coverUrl,
-                    width: 300,
-                    height: 300,
-                    fit: BoxFit.cover,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    song.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(middle: Text('Bewertungen')),
+      child: SafeArea(
+        child: ListView.builder(
+          itemCount: songs.length,
+          itemBuilder: (context, index) {
+            final song = songs[index];
+            return GestureDetector(
+              onTap:
+                  () => playbackManager.playPlaylist(songs, startIndex: index),
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey6,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.network(
+                        song.coverUrl,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(song.artist, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(height: 8),
-                  RatingBar.builder(
-                    initialRating: song.rating.toDouble(),
-                    minRating: 1,
-                    direction: Axis.horizontal,
-                    allowHalfRating: false,
-                    itemCount: 5,
-                    itemSize: 32,
-                    unratedColor: Colors.grey.shade600,
-                    itemBuilder:
-                        (context, _) => Icon(
-                          Icons.star,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                    onRatingUpdate: (rating) async {
-                      await service.setRating(song.id, rating.toInt());
-                      setState(() {
-                        song.rating = rating.toInt();
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () => _playSong(song),
-                    child: const Text('Play'),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            song.title,
+                            style: const TextStyle(
+                              color: CupertinoColors.label,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            song.artist,
+                            style: const TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    RatingBar.builder(
+                      initialRating: 0,
+                      minRating: 1,
+                      direction: Axis.horizontal,
+                      allowHalfRating: false,
+                      itemCount: 5,
+                      itemSize: 32,
+                      unratedColor: Colors.grey.shade600,
+                      itemBuilder: (context, _) => Icon(
+                        Icons.star,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                      onRatingUpdate: (rating) async {
+                        // Update server and remove this song from the list
+                        await service.setRating(song.id, rating.toInt());
+                        setState(() {
+                          songs.removeAt(index);
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

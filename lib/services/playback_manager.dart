@@ -118,6 +118,23 @@ class PlaybackManager {
   // Stops playback.
   void stop() => _player.stop();
 
+  // Plays a list of songs as a playlist, starting at the given index.
+  Future<void> playPlaylist(List<Song> songs, {int startIndex = 0}) async {
+    // Build audio sources with tags for each song
+    final sources =
+        songs.map((song) {
+          final mediaItem = buildMediaItem(song);
+          final uri = _service.uri('/rest/stream', {
+            'id': song.id,
+            'maxBitRate': '320',
+          });
+          return AudioSource.uri(uri, tag: mediaItem);
+        }).toList();
+    final playlist = ConcatenatingAudioSource(children: sources);
+    await _player.setAudioSource(playlist, initialIndex: startIndex);
+    _player.play();
+  }
+
   // Provides a stream of the buffered position of the current media.
   Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
 

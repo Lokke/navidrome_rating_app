@@ -10,6 +10,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../services/navidrome_service.dart';
 import 'package:audio_service/audio_service.dart';
+import '../utils/app_colors.dart';
 
 /// NowPlayingPage shows full song details and rating controls.
 class NowPlayingPage extends StatefulWidget {
@@ -91,25 +92,27 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Swipeable cover art
+              // Centered swipeable cover art
               if (item.artUri != null)
-                GestureDetector(
-                  onHorizontalDragEnd: (details) {
-                    if (details.primaryVelocity! < 0) {
-                      widget.player.seekToNext();
-                    } else if (details.primaryVelocity! > 0) {
-                      widget.player.seekToPrevious();
-                    }
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      item.artUri.toString(),
-                      width: 300,
-                      height: 300,
-                      fit: BoxFit.cover,
+                Center(
+                  child: GestureDetector(
+                    onHorizontalDragEnd: (details) {
+                      if (details.primaryVelocity! < 0) {
+                        widget.player.seekToNext();
+                      } else if (details.primaryVelocity! > 0) {
+                        widget.player.seekToPrevious();
+                      }
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        item.artUri.toString(),
+                        width: 300,
+                        height: 300,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
@@ -118,46 +121,82 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               Text(
                 item.title,
                 style: TextStyle(
-                  color: CupertinoColors.label,
+                  color: AppColors.floatingBarText,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
               ),
               const SizedBox(height: 4),
               Text(
                 item.artist ?? '',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
+                style: TextStyle(
+                  color: AppColors.floatingBarPlaceholder,
                   fontSize: 18,
                 ),
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
               ),
               const SizedBox(height: 4),
               Text(
                 item.album ?? '',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey2,
+                style: TextStyle(
+                  color: AppColors.progressBackground,
                   fontSize: 16,
                 ),
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
               ),
               const SizedBox(height: 16),
-              // Rating
-              RatingBar.builder(
-                initialRating: _currentRating.toDouble(),
-                minRating: 1,
-                direction: Axis.horizontal,
-                allowHalfRating: false,
-                itemCount: 5,
-                itemSize: 32,
-                unratedColor: CupertinoColors.systemGrey2,
-                itemBuilder:
-                    (context, _) => const Icon(
-                      CupertinoIcons.star_fill,
-                      color: CupertinoColors.systemRed,
-                    ),
-                onRatingUpdate: (rating) => _updateRating(rating.toInt()),
+              // Seek bar
+              StreamBuilder<Duration?>(
+                stream: widget.player.durationStream,
+                builder: (context, durSnap) {
+                  final duration = durSnap.data ?? Duration.zero;
+                  return StreamBuilder<Duration>(
+                    stream: widget.player.positionStream,
+                    builder: (context, posSnap) {
+                      final position = posSnap.data ?? Duration.zero;
+                      return Center(
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 20,
+                          child: CupertinoSlider(
+                            min: 0,
+                            max: duration.inMilliseconds.toDouble(),
+                            value:
+                                position.inMilliseconds
+                                    .clamp(0, duration.inMilliseconds)
+                                    .toDouble(),
+                            onChanged:
+                                (value) => widget.player.seek(
+                                  Duration(milliseconds: value.round()),
+                                ),
+                            activeColor: AppColors.secondary,
+                            thumbColor: AppColors.secondary,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              // Centered rating stars
+              Center(
+                child: RatingBar.builder(
+                  initialRating: _currentRating.toDouble(),
+                  minRating: 1,
+                  direction: Axis.horizontal,
+                  allowHalfRating: false,
+                  itemCount: 5,
+                  itemSize: 32,
+                  unratedColor: AppColors.floatingBarPlaceholder,
+                  itemBuilder:
+                      (context, _) => const Icon(
+                        CupertinoIcons.star_fill,
+                        color: AppColors.secondary,
+                      ),
+                  onRatingUpdate: (rating) => _updateRating(rating.toInt()),
+                ),
               ),
               const SizedBox(height: 24),
               // Playback controls: previous, play/pause, next
@@ -168,6 +207,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                     child: const Icon(
                       CupertinoIcons.backward_end_fill,
                       size: 28,
+                      color: AppColors.secondary,
                     ),
                     onPressed: () => widget.player.seekToPrevious(),
                   ),
@@ -182,6 +222,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                               ? CupertinoIcons.pause_fill
                               : CupertinoIcons.play_fill,
                           size: 36,
+                          color: AppColors.secondary,
                         ),
                         onPressed:
                             () =>
@@ -196,6 +237,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                     child: const Icon(
                       CupertinoIcons.forward_end_fill,
                       size: 28,
+                      color: AppColors.secondary,
                     ),
                     onPressed: () => widget.player.seekToNext(),
                   ),

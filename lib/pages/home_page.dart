@@ -74,9 +74,7 @@ class _HomePageState extends State<HomePage> {
             Positioned(
               left: 5,
               right: 5,
-              bottom:
-                  kBottomNavigationBarHeight +
-                  2, // minimal gap to navigation bar
+              bottom: 0, // no gap to bottom edge
               child: GestureDetector(
                 onTap: () => _panelController.open(),
                 child: FloatingBar(player: _player, service: service),

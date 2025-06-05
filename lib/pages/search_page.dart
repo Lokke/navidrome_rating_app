@@ -25,10 +25,6 @@ class _SearchPageState extends State<SearchPage> {
   );
   late final songDownloadService = SongDownloadService(widget.service);
 
-  void _playSong(String mediaId) {
-    playbackManager.playMedia(mediaId);
-  }
-
   Future<void> _search() async {
     if (_query.isEmpty) return;
     setState(() => _loading = true);
@@ -75,8 +71,9 @@ class _SearchPageState extends State<SearchPage> {
                       final song = _results[i];
                       return SongListTile(
                         song: song,
-                        onTap: () async {
-                          _playSong(song.id);
+                        onTap: () {
+                          // Use playlist mode for immediate streaming
+                          playbackManager.playPlaylist(_results, startIndex: i);
                         },
                       );
                     },

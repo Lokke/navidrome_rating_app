@@ -9,6 +9,8 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class PlaybackManager {
   // The AudioPlayer instance used for playback.
@@ -35,12 +37,26 @@ class PlaybackManager {
     );
   }
 
+  // Add helper to persist last media item
+  Future<void> _persistLastMediaItem(MediaItem item) async {
+    final prefs = await SharedPreferences.getInstance();
+    final map = {
+      'id': item.id,
+      'title': item.title,
+      'artist': item.artist,
+      'album': item.album,
+      'artUri': item.artUri?.toString(),
+    };
+    await prefs.setString('last_media_item', jsonEncode(map));
+  }
+
   // Plays a media file using its ID.
   // Fetches metadata, generates the stream URL, and starts playback.
   Future<void> playMedia(String mediaId) async {
     try {
-      // Fetch song metadata (title, artist, cover art, etc.).
+      // Fetch song metadata and build MediaItem.
       final song = await _fetchSongMetadata(mediaId);
+      final mediaItem = buildMediaItem(song);
 
       // Generate the stream URL for the media.
       final streamUrl = _service.uri('/rest/stream', {
@@ -68,15 +84,17 @@ class PlaybackManager {
         throw Exception('Downloaded file is empty');
       }
 
-      // Use the local file for playback
-      final audioSource = AudioSource.file(
-        filePath,
-        tag: buildMediaItem(song), // Use centralized method
-      );
+      // Use the local file for playback and tag with the MediaItem.
+      // Stop any existing playback before setting new source
+      await _player.stop();
+      final audioSource = AudioSource.file(filePath, tag: mediaItem);
 
       // Set the audio source and start playback.
       await _player.setAudioSource(audioSource);
+      await _player.seek(Duration.zero);
       _player.play();
+      // Persist this as the last played item
+      await _persistLastMediaItem(mediaItem);
     } catch (e) {
       // Print any errors that occur during playback.
       print('Error playing media: $e');
@@ -130,9 +148,16 @@ class PlaybackManager {
           });
           return AudioSource.uri(uri, tag: mediaItem);
         }).toList();
+    // Create a concatenated playlist and start playback
     final playlist = ConcatenatingAudioSource(children: sources);
+    // Ensure we fully reset any current playback and load the new playlist
+    await _player.stop();
     await _player.setAudioSource(playlist, initialIndex: startIndex);
+    await _player.seek(Duration.zero);
     _player.play();
+    // Persist the first item in the queue as last played
+    final firstItem = sources[startIndex].tag as MediaItem;
+    await _persistLastMediaItem(firstItem);
   }
 
   // Provides a stream of the buffered position of the current media.

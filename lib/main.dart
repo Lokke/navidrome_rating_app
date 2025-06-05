@@ -15,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/login_page.dart';
 // Import HomePage widget as the main application screen after login
 import 'pages/home_page.dart';
+// Import AppColors for consistent color scheme
+import 'utils/app_colors.dart';
 
 // main() is the Dart VM entrypoint; runs before any widget is created
 void main() async {
@@ -37,13 +39,10 @@ class MyApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         // Use dark theme
         colorScheme: const ColorScheme.dark(
-          // Primary color (app bar, buttons)
-          primary: Color(0xFFB71C1C),
-          // Accent/secondary color (highlights)
-          secondary: Color(0xFFFF5722),
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
         ),
-        // Scaffold background color for all screens
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: AppColors.background,
       ),
       // Initial screen that decides between login or home
       home: const InitialPage(),

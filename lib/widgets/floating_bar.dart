@@ -6,7 +6,11 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../services/navidrome_service.dart';
+import '../utils/app_colors.dart';
+import '../services/playback_manager.dart';
 
 /// FloatingBar shows the currently playing track in a small bar,
 /// including artwork, title, artist, playback controls, and progress.
@@ -37,32 +41,127 @@ class FloatingBar extends StatelessWidget {
         final currentSource = sequenceState?.currentSource;
 
         if (currentSource == null || currentSource.tag == null) {
-          // Display "No song playing" UI
-          debugPrint("FloatingBar: No song playing");
-          return Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.black87,
-            ),
-            margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.music_note, color: Colors.grey, size: 40),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    "No song playing",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          // Attempt to load last played media item from storage
+          return FutureBuilder<MediaItem?>(
+            future: () async {
+              final prefs = await SharedPreferences.getInstance();
+              final jsonStr = prefs.getString('last_media_item');
+              if (jsonStr == null) return null;
+              final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+              return MediaItem(
+                id: map['id'] as String,
+                title: map['title'] as String,
+                artist: map['artist'] as String?,
+                album: map['album'] as String?,
+                artUri:
+                    map['artUri'] != null
+                        ? Uri.parse(map['artUri'] as String)
+                        : null,
+              );
+            }(),
+            builder: (ctx, snap2) {
+              // Determine displayed MediaItem or placeholder
+              final hasData =
+                  snap2.connectionState == ConnectionState.done &&
+                  snap2.data != null;
+              final displayedItem = hasData ? snap2.data! : null;
+              final title = displayedItem?.title ?? 'No song playing';
+              final artist = displayedItem?.artist;
+              final artUri = displayedItem?.artUri;
+              // Build consistent bar with play/pause and progress
+              return Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.floatingBarBackground,
                 ),
-              ],
-            ),
+                margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        // Artwork or placeholder icon
+                        if (artUri != null)
+                          Image.network(
+                            artUri.toString(),
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          )
+                        else
+                          const Icon(
+                            Icons.music_note,
+                            size: 40,
+                            color: AppColors.floatingBarPlaceholder,
+                          ),
+                        const SizedBox(width: 8),
+                        // Title & optional artist
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  color: AppColors.floatingBarText,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (artist != null)
+                                Text(
+                                  artist,
+                                  style: const TextStyle(
+                                    color: AppColors.floatingBarPlaceholder,
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        // Play/Pause button (always present)
+                        StreamBuilder<bool>(
+                          stream: player.playingStream,
+                          builder: (context, playSnap) {
+                            final isPlaying = playSnap.data ?? false;
+                            return IconButton(
+                              icon: Icon(
+                                isPlaying ? Icons.pause : Icons.play_arrow,
+                                color: AppColors.floatingBarIcon,
+                              ),
+                              onPressed: () {
+                                if (isPlaying) {
+                                  player.pause();
+                                } else if (displayedItem != null) {
+                                  // Start playback of last saved track
+                                  PlaybackManager(
+                                    player: player,
+                                    service: service,
+                                  ).playMedia(displayedItem.id);
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Placeholder progress bar ready for playback
+                    Container(
+                      height: 4,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppColors.progressBackground,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         }
 
@@ -81,7 +180,7 @@ class FloatingBar extends StatelessWidget {
         final bar = Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            color: Colors.black87,
+            color: AppColors.floatingBarBackground,
           ),
           margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -138,7 +237,7 @@ class FloatingBar extends StatelessWidget {
                       return IconButton(
                         icon: Icon(
                           isPlaying ? Icons.pause : Icons.play_arrow,
-                          color: Colors.white,
+                          color: AppColors.floatingBarIcon,
                         ),
                         onPressed: () {
                           if (isPlaying) {
@@ -169,7 +268,7 @@ class FloatingBar extends StatelessWidget {
                           height: 4,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade800,
+                            color: AppColors.progressBackground,
                             borderRadius: BorderRadius.circular(2),
                           ),
                           child: Stack(
@@ -184,7 +283,7 @@ class FloatingBar extends StatelessWidget {
                                             .clamp(0.0, 1.0),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.shade400,
+                                    color: AppColors.progressBuffered,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),

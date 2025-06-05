@@ -7,6 +7,8 @@
  * - InitialPage handles login status check and navigation to LoginPage or HomePage.
  */
 
+// Import dart:async to access runZonedGuarded
+import 'dart:async';
 // Import Flutter core library for UI widgets
 import 'package:flutter/material.dart';
 // Import SharedPreferences for storing/retrieving login credentials
@@ -17,13 +19,32 @@ import 'pages/login_page.dart';
 import 'pages/home_page.dart';
 // Import AppColors for consistent color scheme
 import 'utils/app_colors.dart';
+// Import LoggingService for error and log handling
+import 'services/logging_service.dart';
 
 // main() is the Dart VM entrypoint; runs before any widget is created
 void main() async {
   // Ensure Flutter engine and bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-  // Start the Flutter application with MyApp as the root widget
-  runApp(const MyApp());
+  // Initialize logging and create a new session file
+  await LoggingService.init();
+  // Run the app inside a zone that captures print() and errors
+  runZonedGuarded(
+    () {
+      runApp(const MyApp());
+    },
+    (error, stack) {
+      LoggingService.instance.logError(error, stack);
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, message) {
+        // Preserve default behavior
+        parent.print(zone, message);
+        // Also write to our log file
+        LoggingService.instance.log(message);
+      },
+    ),
+  );
 }
 
 // MyApp sets up MaterialApp, theme, and initial route

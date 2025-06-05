@@ -72,7 +72,7 @@ class SongListTile extends StatelessWidget {
             RatingBarIndicator(
               rating: song.rating.toDouble(),
               itemCount: 5,
-              itemSize: 16,
+              itemSize: 12, // smaller stars for compact design
               direction: Axis.horizontal,
               unratedColor: CupertinoColors.systemGrey2,
               itemBuilder:

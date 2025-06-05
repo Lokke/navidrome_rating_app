@@ -5,6 +5,7 @@ import '../services/playback_manager.dart';
 import '../services/song_download_service.dart';
 import '../widgets/song_list_tile.dart';
 import '../models/song.dart';
+import '../utils/app_colors.dart';
 
 class SearchPage extends StatefulWidget {
   final NavidromeService service;
@@ -69,12 +70,68 @@ class _SearchPageState extends State<SearchPage> {
                     itemCount: _results.length,
                     itemBuilder: (c, i) {
                       final song = _results[i];
-                      return SongListTile(
-                        song: song,
-                        onTap: () {
-                          // Use playlist mode for immediate streaming
-                          playbackManager.playPlaylist(_results, startIndex: i);
-                        },
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: SongListTile(
+                              song: song,
+                              onTap: () {
+                                // Use playlist mode for immediate streaming
+                                playbackManager.playPlaylist(
+                                  _results,
+                                  startIndex: i,
+                                );
+                              },
+                            ),
+                          ),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            child: Icon(
+                              CupertinoIcons.ellipsis,
+                              color: AppColors.secondary,
+                            ),
+                            onPressed: () {
+                              showCupertinoModalPopup(
+                                context: context,
+                                builder:
+                                    (_) => CupertinoActionSheet(
+                                      title: Text(song.title),
+                                      actions: [
+                                        CupertinoActionSheetAction(
+                                          child: const Text(
+                                            'Als nächstes hinzufügen',
+                                          ),
+                                          onPressed: () {
+                                            playbackManager.addSongToQueue(
+                                              song,
+                                              next: true,
+                                            );
+                                            Navigator.pop(context);
+                                          },
+                                        ),
+                                        CupertinoActionSheetAction(
+                                          child: const Text(
+                                            'Ans Ende hinzufügen',
+                                          ),
+                                          onPressed: () {
+                                            playbackManager.addSongToQueue(
+                                              song,
+                                              next: false,
+                                            );
+                                            Navigator.pop(context);
+                                          },
+                                        ),
+                                      ],
+                                      cancelButton: CupertinoActionSheetAction(
+                                        isDefaultAction: true,
+                                        child: const Text('Abbrechen'),
+                                        onPressed: () => Navigator.pop(context),
+                                      ),
+                                    ),
+                              );
+                            },
+                          ),
+                        ],
                       );
                     },
                   ),

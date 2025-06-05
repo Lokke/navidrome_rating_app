@@ -19,6 +19,9 @@ class PlaybackManager {
   // The NavidromeService instance used to fetch song metadata and URLs.
   final NavidromeService _service;
 
+  // Tracks the current playlist of songs
+  List<Song> _currentPlaylist = [];
+
   // Constructor to initialize the PlaybackManager with an AudioPlayer and NavidromeService.
   PlaybackManager({
     required AudioPlayer player,
@@ -158,6 +161,30 @@ class PlaybackManager {
     // Persist the first item in the queue as last played
     final firstItem = sources[startIndex].tag as MediaItem;
     await _persistLastMediaItem(firstItem);
+  }
+
+  /// Adds a [song] to the current queue either immediately next or at the end.
+  Future<void> addSongToQueue(Song song, {bool next = false}) async {
+    // Insert into in-memory playlist
+    final index = _player.currentIndex ?? 0;
+    if (next) {
+      _currentPlaylist.insert(index + 1, song);
+    } else {
+      _currentPlaylist.add(song);
+    }
+    // Rebuild and set audio source preserving current index
+    final sources =
+        _currentPlaylist
+            .map(
+              (s) => AudioSource.uri(
+                _service.uri('/rest/stream', {'id': s.id, 'maxBitRate': '320'}),
+                tag: buildMediaItem(s),
+              ),
+            )
+            .toList();
+    final playlist = ConcatenatingAudioSource(children: sources);
+    await _player.setAudioSource(playlist, initialIndex: index);
+    // No auto-play change, keep current playback state
   }
 
   // Provides a stream of the buffered position of the current media.

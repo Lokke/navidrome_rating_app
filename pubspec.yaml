@@ -40,6 +40,7 @@ dependencies:
   just_audio: ^0.10.3
   audio_service: ^0.18.18
   sliding_up_panel: ^2.0.0
+  just_audio_background: ^0.0.1-beta.17
   share_plus: ^11.0.0
 
 dev_dependencies:

@@ -21,6 +21,7 @@ import 'pages/home_page.dart';
 import 'utils/app_colors.dart';
 // Import LoggingService for error and log handling
 import 'services/logging_service.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 // main() is the Dart VM entrypoint; runs before any widget is created
 void main() async {
@@ -28,6 +29,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Initialize logging and create a new session file
   await LoggingService.init();
+  // Initialize foreground background audio notifications
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.lokke.radio.esrating.audio',
+    androidNotificationChannelName: 'Audio Playback',
+    androidNotificationOngoing: true,
+  );
   // Run the app inside a zone that captures print() and errors
   runZonedGuarded(
     () {

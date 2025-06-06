@@ -13,6 +13,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 class PlaybackManager {
+  // Singleton instance
+  static PlaybackManager? _instance;
+
+  /// Returns the shared PlaybackManager instance, initializing with [player] and [service] on first call.
+  factory PlaybackManager({
+    required AudioPlayer player,
+    required NavidromeService service,
+  }) {
+    return _instance ??= PlaybackManager._internal(player, service);
+  }
+
+  // Private constructor
+  PlaybackManager._internal(this._player, this._service);
+
   // The AudioPlayer instance used for playback.
   final AudioPlayer _player;
 
@@ -21,13 +35,6 @@ class PlaybackManager {
 
   // Tracks the current playlist of songs
   List<Song> _currentPlaylist = [];
-
-  // Constructor to initialize the PlaybackManager with an AudioPlayer and NavidromeService.
-  PlaybackManager({
-    required AudioPlayer player,
-    required NavidromeService service,
-  }) : _player = player,
-       _service = service;
 
   // Builds a MediaItem object for a given song.
   MediaItem buildMediaItem(Song song) {
@@ -87,12 +94,10 @@ class PlaybackManager {
         throw Exception('Downloaded file is empty');
       }
 
-      // Use the local file for playback and tag with the MediaItem.
-      // Stop any existing playback before setting new source
+      // Reset current playlist
+      _currentPlaylist = [song];
       await _player.stop();
       final audioSource = AudioSource.file(filePath, tag: mediaItem);
-
-      // Set the audio source and start playback.
       await _player.setAudioSource(audioSource);
       await _player.seek(Duration.zero);
       _player.play();
@@ -141,7 +146,7 @@ class PlaybackManager {
 
   // Plays a list of songs as a playlist, starting at the given index.
   Future<void> playPlaylist(List<Song> songs, {int startIndex = 0}) async {
-    // Build audio sources with tags for each song
+    _currentPlaylist = List.from(songs);
     final sources =
         songs.map((song) {
           final mediaItem = buildMediaItem(song);
@@ -151,13 +156,12 @@ class PlaybackManager {
           });
           return AudioSource.uri(uri, tag: mediaItem);
         }).toList();
-    // Create a concatenated playlist and start playback
     final playlist = ConcatenatingAudioSource(children: sources);
-    // Ensure we fully reset any current playback and load the new playlist
     await _player.stop();
     await _player.setAudioSource(playlist, initialIndex: startIndex);
     await _player.seek(Duration.zero);
     _player.play();
+    _currentPlaylist = songs;
     // Persist the first item in the queue as last played
     final firstItem = sources[startIndex].tag as MediaItem;
     await _persistLastMediaItem(firstItem);
@@ -165,27 +169,39 @@ class PlaybackManager {
 
   /// Adds a [song] to the current queue either immediately next or at the end.
   Future<void> addSongToQueue(Song song, {bool next = false}) async {
-    // Insert into in-memory playlist
-    final index = _player.currentIndex ?? 0;
-    if (next) {
-      _currentPlaylist.insert(index + 1, song);
+    final mediaItem = buildMediaItem(song);
+    final uri = _service.uri('/rest/stream', {
+      'id': song.id,
+      'maxBitRate': '320',
+    });
+    final source = AudioSource.uri(uri, tag: mediaItem);
+    if (_currentPlaylist.isEmpty) {
+      // Initialize a new playlist
+      _currentPlaylist = [song];
+      await _player.setAudioSource(source);
+      _player.play();
     } else {
-      _currentPlaylist.add(song);
+      final currentIndex = _player.currentIndex ?? 0;
+      final insertIndex = next ? currentIndex + 1 : _currentPlaylist.length;
+      _currentPlaylist.insert(insertIndex, song);
+      // If inserting before the current playing item, shift index accordingly
+      if (next && insertIndex <= currentIndex) {
+        await _player.seek(Duration.zero, index: currentIndex + 1);
+      }
     }
-    // Rebuild and set audio source preserving current index
-    final sources =
-        _currentPlaylist
-            .map(
-              (s) => AudioSource.uri(
-                _service.uri('/rest/stream', {'id': s.id, 'maxBitRate': '320'}),
-                tag: buildMediaItem(s),
-              ),
-            )
-            .toList();
-    final playlist = ConcatenatingAudioSource(children: sources);
-    await _player.setAudioSource(playlist, initialIndex: index);
-    // No auto-play change, keep current playback state
   }
+
+  /// Seeks playback to the given index in the current playlist.
+  Future<void> seekToIndex(int index) async {
+    if (index < 0 || index >= _currentPlaylist.length) return;
+    await _player.seek(Duration.zero, index: index);
+  }
+
+  /// Gets the current playback index.
+  int get currentIndex => _player.currentIndex ?? 0;
+
+  /// List of media items currently in the player's queue.
+  List<Song> get currentQueue => List.unmodifiable(_currentPlaylist);
 
   // Provides a stream of the buffered position of the current media.
   Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
@@ -198,4 +214,23 @@ class PlaybackManager {
 
   // Provides a stream indicating whether the player is currently playing.
   Stream<bool> get playingStream => _player.playingStream;
+
+  /// Reorders items in the current playlist
+  Future<void> moveInQueue(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+    final song = _currentPlaylist.removeAt(oldIndex);
+    _currentPlaylist.insert(newIndex, song);
+    final sources =
+        _currentPlaylist.map((s) {
+          final mediaItem = buildMediaItem(s);
+          final uri = _service.uri('/rest/stream', {
+            'id': s.id,
+            'maxBitRate': '320',
+          });
+          return AudioSource.uri(uri, tag: mediaItem);
+        }).toList();
+    final playlist = ConcatenatingAudioSource(children: sources);
+    final current = _player.currentIndex ?? 0;
+    await _player.setAudioSource(playlist, initialIndex: current);
+  }
 }

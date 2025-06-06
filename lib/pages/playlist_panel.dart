@@ -3,70 +3,118 @@
 // Displays the current play queue and allows reordering via long-press drag
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // for Material proxyDecorator
+import 'package:flutter/material.dart';
+import '../models/song.dart';
 import '../services/playback_manager.dart';
 
-class PlaylistPanel extends StatefulWidget {
+class PlaylistPanel extends StatelessWidget {
   final PlaybackManager manager;
   const PlaylistPanel({Key? key, required this.manager}) : super(key: key);
 
   @override
-  State<PlaylistPanel> createState() => _PlaylistPanelState();
-}
-
-class _PlaylistPanelState extends State<PlaylistPanel> {
-  @override
   Widget build(BuildContext context) {
-    final items = widget.manager.currentQueue;
-    final currentIndex = widget.manager.currentIndex;
+    final items = manager.currentQueue;
+    final currentIndex = manager.currentIndex;
 
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(middle: Text('Playlist')),
+    return Container(
+      color: CupertinoColors.systemBackground,
       child: SafeArea(
-        child: ReorderableListView.builder(
-          padding: const EdgeInsets.all(8),
-          itemCount: items.length,
-          onReorder: (oldIndex, newIndex) async {
-            if (newIndex > oldIndex) newIndex--;
-            await widget.manager.moveInQueue(oldIndex, newIndex);
-            setState(() {});
-          },
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final isCurrent = index == currentIndex;
-            return Container(
-              key: ValueKey(item.id),
-              color:
-                  isCurrent
-                      ? CupertinoColors.systemGrey4
-                      : CupertinoColors.systemBackground,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color:
-                            isCurrent
-                                ? CupertinoColors.activeBlue
-                                : CupertinoColors.label,
-                      ),
-                    ),
-                  ),
-                  if (isCurrent)
-                    const Icon(
-                      CupertinoIcons.music_note,
-                      color: CupertinoColors.activeBlue,
-                    ),
-                ],
+        child: Column(
+          children: [
+            // Header
+            Container(
+              height: 56,
+              alignment: Alignment.center,
+              child: Text(
+                'Playlist',
+                style:
+                    CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle,
               ),
-            );
-          },
-          proxyDecorator: (child, index, animation) {
-            return Material(elevation: 6, child: child);
-          },
+            ),
+            const Divider(height: 1),
+            // Content
+            Expanded(
+              child:
+                  items.isEmpty
+                      ? const Center(child: CupertinoActivityIndicator())
+                      : ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final song = items[index];
+                          final isCurrent = index == currentIndex;
+                          return GestureDetector(
+                            onTap: () => manager.seekToIndex(index),
+                            child: Container(
+                              color:
+                                  isCurrent
+                                      ? CupertinoColors.systemGrey5
+                                      : CupertinoColors.systemBackground,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  // Cover art
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child:
+                                        song.coverUrl.isNotEmpty
+                                            ? Image.network(
+                                              song.coverUrl,
+                                              width: 40,
+                                              height: 40,
+                                              fit: BoxFit.cover,
+                                            )
+                                            : const Icon(
+                                              CupertinoIcons.music_note,
+                                              size: 40,
+                                            ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Title & artist
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          song.title,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight:
+                                                isCurrent
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          song.artist,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: CupertinoColors.systemGrey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Playing indicator
+                                  if (isCurrent)
+                                    const Icon(
+                                      CupertinoIcons.play_fill,
+                                      color: CupertinoColors.activeBlue,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+            ),
+          ],
         ),
       ),
     );
